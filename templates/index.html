@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>엑셀 수식 추출기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+      background: #f0f2f5;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1b3a5c;
+      color: #fff;
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    main { padding: 32px 28px; max-width: 1300px; margin: 0 auto; }
+
+    /* ── STEP 1: 업로드 ── */
+    #step-upload { display: block; }
+
+    #drop-zone {
+      border: 3px dashed #a0aec0;
+      border-radius: 16px;
+      background: #fff;
+      padding: 64px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    #drop-zone.drag-over { border-color: #3b82f6; background: #eff6ff; }
+
+    #drop-zone .icon { font-size: 3.5rem; display: block; margin-bottom: 16px; }
+    #drop-zone .main-text { font-size: 1.1rem; color: #444; margin-bottom: 8px; }
+    #drop-zone .sub-text  { font-size: 0.85rem; color: #999; margin-bottom: 26px; }
+
+    #file-input { display: none; }
+
+    .notice-box {
+      display: inline-block;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      color: #9a3412;
+      margin-bottom: 20px;
+    }
+
+    .btn-blue {
+      padding: 11px 34px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-blue:hover { background: #2563eb; }
+
+    /* ── STEP 2: 파일 확인 ── */
+    #step-confirm { display: none; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      padding: 28px 32px;
+    }
+
+    .card-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-bottom: 14px;
+    }
+
+    .file-row { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+    .file-row .file-ico { font-size: 2.6rem; line-height: 1; }
+    .file-row .file-name { font-size: 1.1rem; font-weight: 700; color: #1b3a5c; word-break: break-all; }
+    .file-row .file-meta { font-size: 0.85rem; color: #6b7280; margin-top: 3px; }
+
+    .action-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    .btn-green {
+      padding: 12px 36px;
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-green:hover { background: #15803d; }
+    .btn-green:disabled { background: #86efac; cursor: not-allowed; }
+
+    .btn-outline {
+      padding: 11px 22px;
+      background: transparent;
+      color: #6b7280;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .btn-outline:hover { border-color: #f87171; color: #ef4444; }
+
+    .status-text { font-size: 0.88rem; color: #6b7280; }
+
+    .error-box {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 13px 18px;
+      color: #b91c1c;
+      font-size: 0.9rem;
+      margin-top: 14px;
+      display: none;
+    }
+
+    /* ── STEP 3: 결과 ── */
+    #step-result { display: none; margin-top: 28px; }
+
+    /* 토글 스위치 */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+    .toggle-wrap:hover { background: #e2e8f0; }
+
+    .toggle-switch {
+      width: 36px; height: 20px;
+      background: #cbd5e1;
+      border-radius: 999px;
+      position: relative;
+      transition: background .2s;
+      flex-shrink: 0;
+    }
+    .toggle-switch.on { background: #16a34a; }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 14px; height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      transition: left .2s;
+    }
+    .toggle-switch.on::after { left: 19px; }
+
+    /* 검색 */
+    .search-wrap { position: relative; display: flex; align-items: center; }
+    .search-wrap svg { position: absolute; left: 10px; color: #9ca3af; pointer-events: none; }
+    #search {
+      padding: 7px 12px 7px 32px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      outline: none;
+      width: 200px;
+    }
+    #search:focus { border-color: #3b82f6; }
+
+    .btn-export {
+      padding: 7px 18px;
+      background: #0f766e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn-export:hover { background: #0d6960; }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .result-title { font-size: 1rem; font-weight: 700; color: #1b3a5c; }
+    .result-stats { font-size: 0.82rem; color: #9ca3af; font-weight: 400; margin-left: 8px; }
+
+    /* 시트 탭 */
+    #sheet-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tab {
+      padding: 7px 18px;
+      border: 1px solid #d1d5db;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      background: #e5e7eb;
+      font-size: 0.85rem;
+      color: #6b7280;
+      cursor: pointer;
+    }
+    .tab.active { background: #fff; color: #1b3a5c; font-weight: 700; }
+
+    /* 범례 */
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 8px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-bottom: none;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .dot-formula { background: #dbeafe; border: 1px solid #93c5fd; }
+    .dot-value   { background: #fff; border: 1px solid #e2e8f0; }
+
+    /* 테이블 */
+    #table-wrap {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 0 0 10px 10px;
+      overflow: auto;
+      max-height: 55vh;
+    }
+
+    table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+
+    thead tr { background: #f1f5f9; position: sticky; top: 0; z-index: 2; }
+
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 700;
+      color: #374151;
+      border-bottom: 2px solid #d1d5db;
+      border-right: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    th:last-child { border-right: none; }
+
+    td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      border-right: 1px solid #f5f5f5;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    td:last-child { border-right: none; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #f8faff !important; }
+
+    .row-num {
+      color: #d1d5db; font-size: 0.75rem; text-align: right;
+      min-width: 40px; background: #fafafa; border-right: 1px solid #e5e7eb !important;
+      user-select: none;
+    }
+    th.row-num { background: #f1f5f9; }
+
+    /* 수식 셀 스타일 */
+    .cell-formula {
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.82rem;
+    }
+
+    /* 수식 배지 */
+    .formula-badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 1px solid #93c5fd;
+      border-radius: 3px;
+      padding: 0 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-right: 4px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    mark { background: #fef08a; border-radius: 2px; padding: 0 1px; }
+
+    .empty-msg { padding: 48px; text-align: center; color: #9ca3af; font-size: 0.95rem; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2.5px solid #d1d5db;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>📊 엑셀 수식 추출기 <span style="font-weight:400;font-size:.85rem;margin-left:8px;opacity:.7">(openpyxl 기반)</span></header>
+
+<main>
+
+  <!-- STEP 1 -->
+  <div id="step-upload">
+    <div id="drop-zone" tabindex="0">
+      <span class="icon">📂</span>
+      <p class="main-text">엑셀 파일을 드래그 &amp; 드롭하세요</p>
+      <div class="notice-box">⚠ openpyxl은 <strong>.xlsx</strong> 파일만 지원합니다 (.xls 불가)</div>
+      <br />
+      <button class="btn-blue" type="button" onclick="document.getElementById('file-input').click()">파일 선택하기</button>
+      <input type="file" id="file-input" accept=".xlsx" />
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div id="step-confirm">
+    <div class="card">
+      <p class="card-label">선택된 파일</p>
+      <div class="file-row">
+        <div class="file-ico">📗</div>
+        <div>
+          <div class="file-name" id="file-name-display"></div>
+          <div class="file-meta" id="file-meta-display"></div>
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn-green" id="extract-btn" type="button">🔍 텍스트 &amp; 수식 추출하기</button>
+        <button class="btn-outline" type="button" onclick="resetAll()">다른 파일 선택</button>
+        <span class="status-text" id="status-msg"></span>
+      </div>
+      <div class="error-box" id="error-box"></div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div id="step-result">
+      <div class="result-header" style="margin-top:24px;">
+        <div>
+          <span class="result-title">추출 결과</span>
+          <span class="result-stats" id="result-stats"></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div class="toggle-wrap" id="formula-toggle" title="수식 보기 ON/OFF">
+            <div class="toggle-switch on" id="toggle-knob"></div>
+            <span id="toggle-label">수식 표시</span>
+          </div>
+          <div class="search-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="search" placeholder="검색..." />
+          </div>
+          <button class="btn-export" id="export-btn">CSV 내보내기</button>
+        </div>
+      </div>
+
+      <div id="sheet-tabs"></div>
+
+      <div class="legend">
+        <span><div class="dot dot-formula"></div> 수식 셀 (= 로 시작)</span>
+        <span><div class="dot dot-value"></div> 일반 값 셀</span>
+      </div>
+
+      <div id="table-wrap"><div class="empty-msg">불러오는 중...</div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  var parsedData   = null;   // 서버 응답 전체
+  var currentSheet = null;
+  var showFormula  = true;   // 수식 표시 모드
+  var selectedFile = null;
+
+  var stepUpload   = document.getElementById('step-upload');
+  var stepConfirm  = document.getElementById('step-confirm');
+  var stepResult   = document.getElementById('step-result');
+  var dropZone     = document.getElementById('drop-zone');
+  var fileInput    = document.getElementById('file-input');
+  var extractBtn   = document.getElementById('extract-btn');
+  var statusMsg    = document.getElementById('status-msg');
+  var errorBox     = document.getElementById('error-box');
+  var sheetTabs    = document.getElementById('sheet-tabs');
+  var tableWrap    = document.getElementById('table-wrap');
+  var resultStats  = document.getElementById('result-stats');
+  var searchInput  = document.getElementById('search');
+  var exportBtn    = document.getElementById('export-btn');
+  var toggleWrap   = document.getElementById('formula-toggle');
+  var toggleKnob   = document.getElementById('toggle-knob');
+  var toggleLabel  = document.getElementById('toggle-label');
+
+  // ── Drag & drop ──
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function()  { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFileSelected(e.dataTransfer.files[0]);
+  });
+  dropZone.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  fileInput.addEventListener('change', function() { if (fileInput.files[0]) handleFileSelected(fileInput.files[0]); });
+
+  // ── 파일 선택 → STEP 2 ──
+  function handleFileSelected(file) {
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'xlsx') {
+      alert('.xlsx 파일만 지원합니다.\n(openpyxl 라이브러리 제약)');
+      return;
+    }
+    selectedFile = file;
+    document.getElementById('file-name-display').textContent = file.name;
+    document.getElementById('file-meta-display').textContent = formatBytes(file.size) + '  ·  XLSX 파일';
+    statusMsg.textContent = '';
+    errorBox.style.display = 'none';
+    stepResult.style.display = 'none';
+    parsedData = null;
+    extractBtn.disabled = false;
+    extractBtn.textContent = '🔍 텍스트 & 수식 추출하기';
+    stepUpload.style.display = 'none';
+    stepConfirm.style.display = 'block';
+  }
+
+  // ── 추출 버튼 → 서버 업로드 → STEP 3 ──
+  extractBtn.addEventListener('click', function() {
+    if (!selectedFile) return;
+    extractBtn.disabled = true;
+    extractBtn.innerHTML = '<span class="spinner"></span>추출 중...';
+    statusMsg.textContent = '';
+    errorBox.style.display = 'none';
+
+    var fd = new FormData();
+    fd.append('file', selectedFile);
+
+    fetch('/upload', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) {
+          showError(data.error);
+          extractBtn.disabled = false;
+          extractBtn.textContent = '🔍 텍스트 & 수식 추출하기';
+          return;
+        }
+        parsedData = data;
+        buildTabs();
+        switchSheet(data.sheet_names[0]);
+        stepResult.style.display = 'block';
+        extractBtn.textContent = '✅ 추출 완료';
+        statusMsg.textContent = '시트 ' + data.sheet_names.length + '개 · openpyxl 파싱 완료';
+      })
+      .catch(function(e) {
+        showError('서버 오류: ' + e.message);
+        extractBtn.disabled = false;
+        extractBtn.textContent = '🔍 텍스트 & 수식 추출하기';
+      });
+  });
+
+  // ── 수식 토글 ──
+  toggleWrap.addEventListener('click', function() {
+    showFormula = !showFormula;
+    toggleKnob.classList.toggle('on', showFormula);
+    toggleLabel.textContent = showFormula ? '수식 표시' : '값만 표시';
+    renderTable(searchInput.value.trim());
+  });
+
+  // ── 시트 탭 ──
+  function buildTabs() {
+    sheetTabs.innerHTML = '';
+    parsedData.sheet_names.forEach(function(name) {
+      var btn = document.createElement('button');
+      btn.className = 'tab';
+      btn.textContent = name;
+      btn.addEventListener('click', function() {
+        searchInput.value = '';
+        switchSheet(name);
+      });
+      sheetTabs.appendChild(btn);
+    });
+  }
+
+  function switchSheet(name) {
+    currentSheet = name;
+    sheetTabs.querySelectorAll('.tab').forEach(function(t) {
+      t.classList.toggle('active', t.textContent === name);
+    });
+    renderTable('');
+  }
+
+  // ── 검색 ──
+  searchInput.addEventListener('input', function() {
+    renderTable(searchInput.value.trim());
+  });
+
+  // ── 테이블 렌더 ──
+  function renderTable(query) {
+    var q = query.toLowerCase();
+    var rows = parsedData.sheets[currentSheet] || [];
+
+    if (rows.length === 0) {
+      tableWrap.innerHTML = '<div class="empty-msg">이 시트에는 데이터가 없습니다.</div>';
+      resultStats.textContent = '';
+      return;
+    }
+
+    // 헤더 행 (첫 번째 행)
+    var headerRow = rows[0];
+    var dataRows  = rows.slice(1);
+
+    // 검색 필터
+    var filtered = q
+      ? dataRows.filter(function(row) {
+          return row.some(function(c) {
+            var text = showFormula ? c.formula : (c.value || c.formula);
+            return text.toLowerCase().indexOf(q) !== -1;
+          });
+        })
+      : dataRows;
+
+    // 수식 셀 수 집계
+    var formulaCount = 0;
+    dataRows.forEach(function(row) {
+      row.forEach(function(c) { if (c.is_formula) formulaCount++; });
+    });
+
+    resultStats.textContent = (q ? filtered.length + ' / ' : '') +
+      dataRows.length + '행 × ' + headerRow.length + '열' +
+      (formulaCount ? '  ·  수식 ' + formulaCount + '개' : '');
+
+    // 헤더
+    var thCells = '<th class="row-num">#</th>' +
+      headerRow.map(function(c) {
+        var h = esc(c.formula || ('열' + (headerRow.indexOf(c) + 1)));
+        return '<th title="' + h + '">' + h + '</th>';
+      }).join('');
+
+    // 바디
+    var tbRows = filtered.map(function(row, ri) {
+      var tds = row.map(function(cell) {
+        var displayText = showFormula
+          ? cell.formula
+          : (cell.value !== '' ? cell.value : cell.formula);
+
+        var highlighted = q ? hlText(displayText, query) : esc(displayText);
+
+        var cls = (showFormula && cell.is_formula) ? ' class="cell-formula"' : '';
+        var badge = (showFormula && cell.is_formula) ? '<span class="formula-badge">fx</span>' : '';
+        var title = cell.is_formula
+          ? '수식: ' + esc(cell.formula) + (cell.value ? '  /  값: ' + esc(cell.value) : '')
+          : esc(displayText);
+
+        return '<td' + cls + ' title="' + title + '">' + badge + highlighted + '</td>';
+      }).join('');
+      return '<tr><td class="row-num">' + (ri + 1) + '</td>' + tds + '</tr>';
+    }).join('');
+
+    tableWrap.innerHTML =
+      '<table>' +
+      '<thead><tr>' + thCells + '</tr></thead>' +
+      '<tbody>' + tbRows + '</tbody>' +
+      '</table>';
+  }
+
+  // ── CSV 내보내기 ──
+  exportBtn.addEventListener('click', function() {
+    if (!parsedData) return;
+    var rows = parsedData.sheets[currentSheet] || [];
+    if (!rows.length) return;
+
+    var csvRows = rows.map(function(row) {
+      return row.map(function(c) {
+        var v = showFormula ? c.formula : (c.value !== '' ? c.value : c.formula);
+        return (v.indexOf(',') !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1)
+          ? '"' + v.replace(/"/g, '""') + '"' : v;
+      }).join(',');
+    });
+
+    var blob = new Blob(['﻿' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = (currentSheet || 'export') + '.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  });
+
+  // ── 리셋 ──
+  function resetAll() {
+    selectedFile = null; parsedData = null;
+    fileInput.value = ''; searchInput.value = '';
+    stepConfirm.style.display = 'none';
+    stepResult.style.display  = 'none';
+    stepUpload.style.display  = 'block';
+  }
+
+  // ── 유틸 ──
+  function showError(msg) {
+    errorBox.textContent = '⚠ ' + msg;
+    errorBox.style.display = 'block';
+  }
+  function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function hlText(text, q) {
+    var e = esc(text);
+    var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+    return e.replace(re, '<mark>$1</mark>');
+  }
+</script>
+</body>
+</html>
